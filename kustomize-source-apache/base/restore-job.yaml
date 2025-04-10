@@ -1,0 +1,126 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: moodle-restore
+spec:
+  template:
+    spec:
+      serviceAccountName: backup-sa
+      containers:
+      - name: restore
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Set namespace from downward API
+          NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+          echo "Running in namespace: $NAMESPACE"
+          
+          # Get the backup date from command line argument or use latest
+          BACKUP_DATE=${1:-$(ls -t /backup | head -n1)}
+          BACKUP_DIR="/backup/$BACKUP_DATE"
+          
+          if [ ! -d "$BACKUP_DIR" ]; then
+            echo "Error: Backup directory $BACKUP_DIR not found"
+            echo "Available backups:"
+            ls -l /backup
+            exit 1
+          fi
+          
+          echo "Restoring from backup: $BACKUP_DATE"
+          
+          # Create pre-restore backup
+          echo "Creating pre-restore backup..."
+          PRE_RESTORE_DIR="/backup/pre-restore-$(date +%Y%m%d-%H%M%S)"
+          mkdir -p $PRE_RESTORE_DIR
+          
+          # Backup current MySQL database
+          echo "Backing up current MySQL database..."
+          MYSQL_POD=$(kubectl get pods -n $NAMESPACE -l app=moodle,tier=database -o jsonpath='{.items[0].metadata.name}')
+          if [ -z "$MYSQL_POD" ]; then
+            echo "Error: MySQL pod not found"
+            exit 1
+          fi
+          kubectl exec -n $NAMESPACE $MYSQL_POD -- mysqldump -u root -p$MYSQL_ROOT_PASSWORD moodle | gzip > $PRE_RESTORE_DIR/moodle-db.sql.gz
+          
+          # Backup current Moodle data
+          echo "Backing up current Moodle data..."
+          MOODLE_POD=$(kubectl get pods -n $NAMESPACE -l app=moodle-apache -o jsonpath='{.items[0].metadata.name}')
+          if [ -z "$MOODLE_POD" ]; then
+            echo "Error: Moodle pod not found"
+            exit 1
+          fi
+          kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/www/html/moodledata > $PRE_RESTORE_DIR/moodledata.tar.gz
+          
+          echo "Pre-restore backup completed: $PRE_RESTORE_DIR"
+          
+          # Verify backup files exist and are not empty
+          echo "Verifying backup files..."
+          if [ ! -s "$BACKUP_DIR/moodle-db.sql.gz" ] || [ ! -s "$BACKUP_DIR/moodledata.tar.gz" ]; then
+            echo "Error: Backup files are missing or empty"
+            exit 1
+          fi
+          
+          # Restore MySQL database
+          echo "Restoring MySQL database..."
+          
+          # Drop and recreate the database
+          kubectl exec -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD -e "DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle;"
+          
+          # Restore the database
+          gunzip -c $BACKUP_DIR/moodle-db.sql.gz | kubectl exec -i -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle
+          
+          # Verify MySQL restore
+          echo "Verifying MySQL restore..."
+          # Get list of tables
+          TABLES=$(kubectl exec -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle -e "SHOW TABLES;" | tail -n +2)
+          TABLE_COUNT=$(echo "$TABLES" | wc -l)
+          
+          echo "Found $TABLE_COUNT tables in the restored database"
+          if [ "$TABLE_COUNT" -lt 10 ]; then
+            echo "Error: MySQL restore verification failed - too few tables"
+            echo "Tables found:"
+            echo "$TABLES"
+            echo "Please check the backup file for completeness"
+            exit 1
+          fi
+          
+          echo "MySQL restore verified: $TABLE_COUNT tables found"
+          echo "First 10 tables:"
+          echo "$TABLES" | head -n 10
+          
+          # Restore Moodle data
+          echo "Restoring Moodle data..."
+          
+          # Copy the backup to the pod
+          kubectl cp $BACKUP_DIR/moodledata.tar.gz $NAMESPACE/$MOODLE_POD:/tmp/moodledata.tar.gz
+          
+          # Extract the backup
+          kubectl exec -n $NAMESPACE $MOODLE_POD -- bash -c "rm -rf /var/www/html/moodledata/* && tar -xzf /tmp/moodledata.tar.gz -C /var/www/html/moodledata --strip-components=1 && rm /tmp/moodledata.tar.gz"
+          
+          # Verify Moodle data restore
+          echo "Verifying Moodle data restore..."
+          DATA_DIR_SIZE=$(kubectl exec -n $NAMESPACE $MOODLE_POD -- du -sh /var/www/html/moodledata | cut -f1)
+          if [ "$DATA_DIR_SIZE" = "0" ]; then
+            echo "Error: Moodle data restore verification failed - empty data directory"
+            exit 1
+          fi
+          echo "Moodle data restore verified: $DATA_DIR_SIZE of data restored"
+          
+          echo "Restore completed successfully"
+          echo "Pre-restore backup available at: $PRE_RESTORE_DIR"
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-root-password
+        volumeMounts:
+        - name: backup-volume
+          mountPath: /backup
+      volumes:
+      - name: backup-volume
+        persistentVolumeClaim:
+          claimName: backup-pvc
+      restartPolicy: Never 

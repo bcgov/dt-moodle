@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apache-config
+data:
+  "000-default.conf": |
+    <VirtualHost *:8080>
+      ServerAdmin webmaster@localhost
+      DocumentRoot /var/www/html
+
+      <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+      </Directory>
+
+      # PHP Configuration
+      <FilesMatch \.php$>
+        SetHandler application/x-httpd-php
+      </FilesMatch>
+
+      # PHP Settings
+      php_value upload_max_filesize 64M
+      php_value post_max_size 64M
+      php_value max_execution_time 300
+      php_value max_input_time 300
+      php_value memory_limit 256M
+      php_value max_input_vars 5000
+      php_flag display_errors off
+      php_value error_reporting "E_ALL & ~E_DEPRECATED & ~E_STRICT"
+      php_value session.gc_maxlifetime 1440
+      php_value session.gc_probability 1
+      php_value session.gc_divisor 100
+      php_value session.cookie_secure 1
+      php_value session.cookie_httponly 1
+      php_value session.use_only_cookies 1
+      php_value session.cookie_samesite "Strict"
+
+      ErrorLog ${APACHE_LOG_DIR}/error.log
+      CustomLog ${APACHE_LOG_DIR}/access.log combined
+    </VirtualHost>
+
+  "php.ini": |
+    [PHP]
+    ; Required extensions
+    extension=intl.so
+    extension=soap.so
+    extension=exif.so
+    extension=gd.so
+    extension=mbstring.so
+    extension=mysqli.so
+    extension=openssl.so
+    extension=pdo_mysql.so
+    extension=zip.so
+    extension=curl.so
+    extension=xml.so
+    extension=xmlrpc.so
+    extension=ldap.so
+
+    ; PHP Settings
+    max_input_vars=5000
+    memory_limit=256M
+    upload_max_filesize=64M
+    post_max_size=64M
+    max_execution_time=300
+    max_input_time=300
+    display_errors=Off
+    error_reporting=E_ALL & ~E_DEPRECATED & ~E_STRICT
+    session.gc_maxlifetime=1440
+    session.gc_probability=1
+    session.gc_divisor=100
+    session.cookie_secure=1
+    session.cookie_httponly=1
+    session.use_only_cookies=1
+    session.cookie_samesite=Strict
+
+  ssl.conf: |
+    # Handle proxy headers for OpenShift route
+    SetEnvIf X-Forwarded-Proto "https" HTTPS=on
+    SetEnvIf X-Forwarded-Proto "https" SSL=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_PROTO=https
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_SSL=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_SCHEME=https
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_PORT=443
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_HOST=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_FOR=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_SERVER=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_URI=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_PATH=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_QUERY=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_FRAGMENT=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_USER=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_PASS=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_AUTH=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_ADDR=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_HOST=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_PORT=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_USER=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_PASS=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_AUTH=on
+    SetEnvIf X-Forwarded-Proto "https" HTTP_X_FORWARDED_REMOTE_IDENT=on
+
+    # Moodle configuration
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    # Global rewrite rules
+    RewriteEngine On
+    
+    # Handle proxy headers
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+    RequestHeader set X-Forwarded-Host "%{HTTP_HOST}e" env=HTTP_HOST
+    
+    # Force HTTPS through the OpenShift route
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    
+    # Set environment variables for Moodle
+    SetEnv MOODLE_WWWROOT "https://moodle-apache-aa0156-dev.apps.silver.devops.gov.bc.ca"
+    SetEnv MOODLE_HTTPS "true"
+    
+    # Override SERVER_PORT for HTTPS connections
+    SetEnvIf HTTPS on SERVER_PORT=443 

@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: moodle-backup
+spec:
+  schedule: "0 1 * * 0"  # Run at 1 AM every Sunday
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: backup-sa
+          containers:
+          - name: backup
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Set namespace from downward API
+              NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+              echo "Running in namespace: $NAMESPACE"
+              
+              # Check available space (in MB)
+              AVAILABLE_SPACE=$(df -m /backup | awk 'NR==2 {print $4}')
+              MIN_SPACE=1000  # Minimum 1GB required
+              
+              if [ $AVAILABLE_SPACE -lt $MIN_SPACE ]; then
+                echo "Warning: Low disk space. Cleaning up old backups..."
+                # Keep only last backup if space is low
+                find /backup -type d -mtime +7 -exec rm -rf {} \;
+              fi
+              
+              # Create backup directory with date
+              BACKUP_DIR="/backup/$(date +%Y%m%d)"
+              mkdir -p $BACKUP_DIR
+              
+              # List all pods for debugging
+              echo "Available pods in namespace:"
+              kubectl get pods -n $NAMESPACE --show-labels
+              
+              # Backup MySQL database with compression
+              echo "Looking for MySQL pod..."
+              MYSQL_POD=$(kubectl get pods -n $NAMESPACE -l app=moodle,tier=database -o jsonpath='{.items[0].metadata.name}')
+              if [ -z "$MYSQL_POD" ]; then
+                echo "Error: MySQL pod not found with labels app=moodle,tier=database"
+                exit 1
+              fi
+              echo "Found MySQL pod: $MYSQL_POD"
+              kubectl exec -n $NAMESPACE $MYSQL_POD -- mysqldump -u root -p$MYSQL_ROOT_PASSWORD moodle | gzip > $BACKUP_DIR/moodle-db.sql.gz
+              
+              # Backup Moodle data with compression
+              echo "Looking for Moodle pod..."
+              MOODLE_POD=$(kubectl get pods -n $NAMESPACE -l app=moodle-apache -o jsonpath='{.items[0].metadata.name}')
+              if [ -z "$MOODLE_POD" ]; then
+                echo "Error: Moodle pod not found with label app=moodle-apache"
+                exit 1
+              fi
+              echo "Found Moodle pod: $MOODLE_POD"
+              kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/www/html/moodledata > $BACKUP_DIR/moodledata.tar.gz
+              
+              # Cleanup old backups (keep last 2 weeks)
+              find /backup -type d -mtime +14 -exec rm -rf {} \;
+              
+              # Log backup sizes
+              echo "Backup sizes:"
+              du -sh $BACKUP_DIR/*
+            env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: moodle-secrets
+                  key: mysql-root-password
+            volumeMounts:
+            - name: backup-volume
+              mountPath: /backup
+          volumes:
+          - name: backup-volume
+            persistentVolumeClaim:
+              claimName: backup-pvc
+          restartPolicy: OnFailure 

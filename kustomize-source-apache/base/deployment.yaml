@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moodle-apache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moodle-apache
+  template:
+    metadata:
+      labels:
+        app: moodle-apache
+    spec:
+      initContainers:
+      - name: init-apache-dirs
+        image: busybox
+        command: ['sh', '-c', 'mkdir -p /etc/apache2/sites-enabled']
+        volumeMounts:
+        - name: apache-config
+          mountPath: /etc/apache2/sites-enabled
+      containers:
+      - name: moodle-apache
+        image: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache:PLACEHOLDER
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MOODLE_DATABASE_HOST
+          value: moodle-mariadb
+        - name: MOODLE_DATABASE_NAME
+          value: moodle
+        - name: MOODLE_DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-user
+        - name: MOODLE_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-password
+        volumeMounts:
+        - name: moodledata
+          mountPath: /var/www/html/moodledata
+        - name: moodle-config
+          mountPath: /var/www/html/config.php
+          subPath: config.php
+        - name: apache-config
+          mountPath: /etc/apache2/sites-enabled
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Gi"
+      volumes:
+      - name: moodledata
+        persistentVolumeClaim:
+          claimName: moodledata
+      - name: moodle-config
+        configMap:
+          name: moodle-custom-config
+      - name: apache-config
+        configMap:
+          name: apache-config 

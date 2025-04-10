@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moodle-mariadb
+  labels:
+    app: moodle
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moodle
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: moodle
+        tier: database
+    spec:
+      initContainers:
+      - name: init-mariadb
+        image: busybox
+        command: 
+        - sh
+        - -c
+        - |
+          rm -rf /var/lib/mysql/*
+          mkdir -p /var/lib/mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      containers:
+      - name: mariadb
+        image: mariadb:10.6
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          value: moodle
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-user
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moodle-secrets
+              key: mysql-password
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -p${MYSQL_ROOT_PASSWORD}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -p${MYSQL_ROOT_PASSWORD}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moodle-mariadb
+  labels:
+    app: moodle
+    tier: database
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+  selector:
+    app: moodle
+    tier: database
