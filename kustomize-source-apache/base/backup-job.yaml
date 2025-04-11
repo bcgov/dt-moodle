@@ -57,6 +57,10 @@ spec:
               fi
               echo "Found Moodle pod: $MOODLE_POD"
               kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/www/html/moodledata > $BACKUP_DIR/moodledata.tar.gz
+
+              # Backup secrets
+              echo "Backing up secrets..."
+              kubectl get secret moodle-secrets -n $NAMESPACE -o yaml > $BACKUP_DIR/moodle-secrets.yaml
               
               # Cleanup old backups (keep last 2 weeks)
               find /backup -type d -mtime +14 -exec rm -rf {} \;

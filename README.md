@@ -105,11 +105,12 @@ kubectl apply -k overlays/prod
 ### Backup Configuration
 
 The backup system is configured with:
-- Weekly automated backups (every Sunday at 2 AM)
-- Retention of the last 2 backups
+- Weekly automated backups (every Sunday at 1 AM)
+- Retention of the last 2 weeks of backups
 - 5Gi storage space allocated for backups
 - Pre-restore backup creation
 - Verification steps for both backup and restore operations
+- Automatic secret backup included in each backup
 
 ### Backup Directory Structure
 
@@ -117,7 +118,8 @@ The backup system is configured with:
 /backup/
 └── YYYYMMDD/              # Backup date directory (e.g., 20250409)
     ├── moodle-db.sql.gz   # Compressed MySQL database dump
-    └── moodledata.tar.gz  # Compressed Moodle data directory
+    ├── moodledata.tar.gz  # Compressed Moodle data directory
+    └── moodle-secrets.yaml # Backup of Moodle secrets
 ```
 
 ### Managing Backups
@@ -231,11 +233,12 @@ To deploy Moodle:
 ### Backup Configuration
 
 The backup system is configured with:
-- Weekly automated backups (every Sunday at 2 AM)
-- Retention of the last 2 backups
+- Weekly automated backups (every Sunday at 1 AM)
+- Retention of the last 2 weeks of backups
 - 5Gi storage space allocated for backups
 - Pre-restore backup creation
 - Verification steps for both backup and restore operations
+- Automatic secret backup included in each backup
 
 ### Restoring from Backup
 
