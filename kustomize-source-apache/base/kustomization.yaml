@@ -16,6 +16,8 @@ resources:
 - backup-job.yaml
 - backup-pvc.yaml
 - backup-sa.yaml
+- moodle-cron.yaml
+- moodle-cron-sa.yaml
 
 images:
 - name: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache
