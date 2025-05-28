@@ -10,3 +10,20 @@ images:
 - name: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache
   newName: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache
   newTag: dev 
+
+patches:
+  - target:
+      kind: Route
+    patch: |-
+      - op: add
+        path: /spec/host
+        value: dt-moodle-dev.apps.silver.devops.gov.bc.ca
+  - target:
+      kind: Deployment
+      name: moodle-apache
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MOODLE_WWWROOT
+          value: "https://dt-moodle-dev.apps.silver.devops.gov.bc.ca" 

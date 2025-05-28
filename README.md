@@ -139,6 +139,22 @@ oc exec backup-viewer -- ls -l /backup
 oc delete pod backup-viewer
 ```
 
+#### Triggering a Manual Backup
+
+To trigger a manual backup job immediately, you can create a new Job from the existing `moodle-backup` CronJob template. This is useful if you need a backup outside the scheduled time.
+
+```bash
+# Replace <namespace> with your target namespace
+oc create job moodle-backup-manual-$(date +%s) --from=cronjob/moodle-backup -n <namespace>
+```
+
+This command creates a new Job named `moodle-backup-manual-<timestamp>` (e.g., `moodle-backup-manual-1678886400`). You can monitor its progress like any other Kubernetes Job:
+
+```bash
+# Replace <namespace> and the job name accordingly
+oc logs -f job/moodle-backup-manual-$(date +%s) -n <namespace>
+```
+
 #### Restoring from Backup
 
 1. Apply the restore job configuration:
@@ -247,24 +263,7 @@ The backup system is configured with:
 To view available backups, create a temporary pod with the backup PVC mounted:
 ```bash
 # Create a temporary pod with the backup PVC mounted
-cat <<EOF | oc apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backup-viewer
-spec:
-  containers:
-  - name: backup-viewer
-    image: bitnami/kubectl:latest
-    command: ["sleep", "infinity"]
-    volumeMounts:
-    - name: backup-volume
-      mountPath: /backup
-  volumes:
-  - name: backup-volume
-    persistentVolumeClaim:
-      claimName: backup-pvc
-EOF
+oc apply -f - backup-viewer-pod.yaml 
 
 # Wait for the pod to be ready
 oc wait --for=condition=Ready pod/backup-viewer
@@ -303,48 +302,3 @@ oc apply -f base/restore-job.yaml -n <namespace>
 ```bash
 oc create job restore-specific --from=cronjob/moodle-restore -n <namespace> -- /bin/sh -c 'BACKUP_DATE=YYYYMMDD /restore.sh'
 ```
-
-#### 4. Monitor Restore Progress
-
-To monitor the restore progress:
-```bash
-oc logs -f job/restore-latest -n <namespace>
-```
-
-### Restore Process Details
-
-The restore process includes the following steps:
-
-1. **Pre-restore Backup**
-   - Creates a timestamped backup of current data
-   - Stores backup in `/backup/pre-restore-YYYYMMDD-HHMMSS/`
-   - Includes both MySQL database and Moodle data files
-
-2. **Backup Verification**
-   - Verifies backup files exist and are not empty
-   - Checks both database and data files
-
-3. **MySQL Restore**
-   - Drops and recreates the database
-   - Restores from SQL dump
-   - Verifies table count (fails if < 10 tables)
-
-4. **Moodle Data Restore**
-   - Clears existing data directory
-   - Restores from tarball
-   - Verifies data directory size
-
-5. **Completion**
-   - Reports success/failure
-   - Provides location of pre-restore backup
-
-### Important Notes
-
-- The restore process will overwrite existing data
-- A pre-restore backup is automatically created before any restore operation
-- The restore job will fail if:
-  - Backup files are missing or empty
-  - Too few MySQL tables are restored
-  - Moodle data directory is empty after restore
-- Pre-restore backups are not automatically cleaned up - manual cleanup may be required
-

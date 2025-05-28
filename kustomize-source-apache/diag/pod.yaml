@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-copy-helper
+spec:
+  volumes:
+    - name: old-volume
+      persistentVolumeClaim:
+        claimName: moodledata # <-- IMPORTANT: Assumed name for your OLD ReadWriteOnce PVC
+    - name: new-volume
+      persistentVolumeClaim:
+        claimName: moodle-data # This assumes your new PVC is named 'moodledata' as per the pvc.yaml you provided
+  containers:
+    - name: helper-container
+      image: alpine/git # Using alpine/git as it's small and includes 'cp' and 'sh'. You can use 'ubuntu' or other images if you prefer 'rsync'.
+      command: ["/bin/sh", "-c"]
+      args:
+        - >
+          echo "Starting data copy script...";
+          echo "Checking mount points...";
+          ls -l /mnt/old-data;
+          ls -l /mnt/new-data;
+          echo "Copying data from /mnt/old-data to /mnt/new-data...";
+          cp -av /mnt/old-data/* /mnt/new-data/;
+          # If you prefer rsync (and your chosen image has it), you can use:
+          # rsync -avh --progress /mnt/old-data/ /mnt/new-data/
+          echo "Data copy finished. Verifying...";
+          ls -l /mnt/new-data; # Basic verification
+          echo "Pod will sleep for 1 hour. You can exec into it to check or delete it when done.";
+          sleep 3600;
+      volumeMounts:
+        - mountPath: "/mnt/old-data"
+          name: old-volume
+        - mountPath: "/mnt/new-data"
+          name: new-volume
+  restartPolicy: Never

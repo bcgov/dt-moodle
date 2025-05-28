@@ -32,8 +32,11 @@ RUN cd /var/www/html \
     && rm moodle.tgz \
     && mv moodle/* . \
     && rm -rf moodle \
+    && mkdir /var/moodledata_secure \
     && chown -R moodle:moodle /var/www/html \
-    && chmod -R g=u /var/www/html
+    && chown -R moodle:moodle /var/moodledata_secure \
+    && chmod -R g=u /var/www/html \
+    && chmod -R 0770 /var/moodledata_secure
 
 # Configure Apache
 RUN a2enmod rewrite \
@@ -49,13 +52,41 @@ RUN a2enmod rewrite \
     && echo "  AllowOverride All" >> /etc/apache2/apache2.conf \
     && echo "  Require all granted" >> /etc/apache2/apache2.conf \
     && echo "</Directory>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
+    && echo "# Deny access to sensitive directories and files" >> /etc/apache2/apache2.conf \
+    && echo "# Block access to version control, Behat, tests, composer files, and other sensitive locations/files" >> /etc/apache2/apache2.conf \
+    && echo '<DirectoryMatch "^/var/www/html/(\.git|\.svn|\.bzr|\.hg|vendor|node_modules)">' >> /etc/apache2/apache2.conf \
+    && echo "    Require all denied" >> /etc/apache2/apache2.conf \
+    && echo "</DirectoryMatch>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
+    && echo '<DirectoryMatch "/(tests|behat|fixtures)/">' >> /etc/apache2/apache2.conf \
+    && echo "    Require all denied" >> /etc/apache2/apache2.conf \
+    && echo "</DirectoryMatch>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
+    && echo "# Block specific files that should not be web accessible" >> /etc/apache2/apache2.conf \
+    && echo '<FilesMatch "^(composer\.(json|lock)|phpunit\.xml(\.dist)?|environment\.xml|install\.xml|README.*|readme.*|UPGRADING.*|upgrade.*|\.feature|\.lock|\.log|\.stylelintrc|\.eslint.*|\.prettier.*|\.editorconfig)$">' >> /etc/apache2/apache2.conf \
+    && echo "    Require all denied" >> /etc/apache2/apache2.conf \
+    && echo "</FilesMatch>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
+    && echo "# Specifically protect admin/environment.xml if the generic FilesMatch isn't sufficient or too broad" >> /etc/apache2/apache2.conf \
+    && echo "<Location \"/admin/environment.xml\">" >> /etc/apache2/apache2.conf \
+    && echo "    Require all denied" >> /etc/apache2/apache2.conf \
+    && echo "</Location>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
+    && echo "# Ensure directory listings are off for lib/classes (already set globally but can be reiterated or made stricter if needed)" >> /etc/apache2/apache2.conf \
+    && echo "<Directory \"/var/www/html/lib/classes\">" >> /etc/apache2/apache2.conf \
+    && echo "    Options -Indexes" >> /etc/apache2/apache2.conf \
+    && echo "    # Allow access to PHP files if called internally by Moodle" >> /etc/apache2/apache2.conf \
+    && echo "    Require all granted" >> /etc/apache2/apache2.conf \
+    && echo "</Directory>" >> /etc/apache2/apache2.conf \
+    && echo "" >> /etc/apache2/apache2.conf \
     && echo "RemoteIPHeader X-Forwarded-For" >> /etc/apache2/apache2.conf \
     && echo "RemoteIPTrustedProxy 10.0.0.0/8" >> /etc/apache2/apache2.conf \
-    && echo "SetEnvIf X-Forwarded-Proto https HTTPS=on" >> /etc/apache2/apache2.conf \
-    && echo "SetEnvIf X-Forwarded-Port 443 HTTPS=on" >> /etc/apache2/apache2.conf \
-    && echo "SetEnvIf X-Forwarded-Port 443 SERVER_PORT=443" >> /etc/apache2/apache2.conf \
-    && echo "SetEnvIf X-Forwarded-Host .* HTTP_HOST=\$0" >> /etc/apache2/apache2.conf \
-    && echo "SetEnvIf HTTPS on SERVER_PORT=443" >> /etc/apache2/apache2.conf \
+    # && echo "SetEnvIf X-Forwarded-Proto https HTTPS=on" >> /etc/apache2/apache2.conf \
+    # && echo "SetEnvIf X-Forwarded-Port 443 HTTPS=on" >> /etc/apache2/apache2.conf \
+    # && echo "SetEnvIf X-Forwarded-Port 443 SERVER_PORT=443" >> /etc/apache2/apache2.conf \
+    # && echo "SetEnvIf X-Forwarded-Host .* HTTP_HOST=\$0" >> /etc/apache2/apache2.conf \
+    # && echo "SetEnvIf HTTPS on SERVER_PORT=443" >> /etc/apache2/apache2.conf \
     && echo "<FilesMatch \".+\.ph(ar|p|tml)$\">" >> /etc/apache2/apache2.conf \
     && echo "  SetHandler application/x-httpd-php" >> /etc/apache2/apache2.conf \
     && echo "</FilesMatch>" >> /etc/apache2/apache2.conf \

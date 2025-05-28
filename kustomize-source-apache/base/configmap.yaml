@@ -5,6 +5,6 @@ metadata:
 data:
   MOODLE_DATABASE_HOST: "moodle-mariadb"
   MOODLE_DATABASE_NAME: "moodle"
-  MOODLE_WWWROOT: "https://moodle-apache-aa0156-dev.apps.silver.devops.gov.bc.ca"
+  MOODLE_WWWROOT: "https://dt-moodle-dev.apps.silver.devops.gov.bc.ca"
   MOODLE_DATABASE_TYPE: "mysqli"
   MOODLE_DATABASE_PORT: "3306"

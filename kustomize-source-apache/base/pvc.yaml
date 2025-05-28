@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: moodledata
+  name: moodle-data
 spec:
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 200Mi 
+      storage: 400Mi 

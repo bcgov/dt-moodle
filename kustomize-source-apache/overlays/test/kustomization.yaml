@@ -17,3 +17,24 @@ patches:
       - op: replace
         path: /spec/host
         value: dt-moodle-test.apps.silver.devops.gov.bc.ca
+  - target:
+      kind: Deployment
+      name: moodle-apache
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MOODLE_WWWROOT
+          value: "https://dt-moodle-test.apps.silver.devops.gov.bc.ca"
+  - target:
+      kind: PersistentVolumeClaim
+      name: backup-pvc
+    patch: |-
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: backup-pvc
+      spec:
+        resources:
+          requests:
+            storage: 2Gi

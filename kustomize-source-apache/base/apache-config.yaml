@@ -110,18 +110,18 @@ data:
     # Global rewrite rules
     RewriteEngine On
     
-    # Handle proxy headers
-    RequestHeader set X-Forwarded-Proto "https"
-    RequestHeader set X-Forwarded-Port "443"
-    RequestHeader set X-Forwarded-Host "%{HTTP_HOST}e" env=HTTP_HOST
+    # Handle proxy headers (Keep SetEnvIf from above, remove RequestHeader set)
+    # RequestHeader set X-Forwarded-Proto "https"
+    # RequestHeader set X-Forwarded-Port "443"
+    # RequestHeader set X-Forwarded-Host "%{HTTP_HOST}e" env=HTTP_HOST
     
-    # Force HTTPS through the OpenShift route
-    RewriteCond %{HTTP:X-Forwarded-Proto} !https
-    RewriteCond %{HTTPS} off
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    # Remove problematic redirect rule
+    # RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
     
     # Set environment variables for Moodle
-    SetEnv MOODLE_WWWROOT "https://moodle-apache-aa0156-dev.apps.silver.devops.gov.bc.ca"
+    # SetEnv MOODLE_WWWROOT "https://moodle-apache-aa0156-dev.apps.silver.devops.gov.bc.ca" # This was causing the issue
     SetEnv MOODLE_HTTPS "true"
     
     # Override SERVER_PORT for HTTPS connections

@@ -11,11 +11,32 @@ images:
   newTag: prod 
 patches:
   - target:
+      kind: PersistentVolumeClaim
+      name: backup-pvc
+    patch: |-
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: backup-pvc
+      spec:
+        resources:
+          requests:
+            storage: 2Gi
+  - target:
       kind: Route
     patch: |-
       - op: replace
         path: /spec/host
         value: dt-moodle.apps.silver.devops.gov.bc.ca
+  - target:
+      kind: Deployment
+      name: moodle-apache
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MOODLE_WWWROOT
+          value: "https://dt-moodle.apps.silver.devops.gov.bc.ca"
 # - target:
 #     kind: Deployment
 #     name: moodle-apache
@@ -65,4 +86,5 @@ patches:
 #       value: 512Mi
 #     - op: replace
 #       path: /spec/template/spec/containers/0/resources/requests/cpu
+#       value: 500m 
 #       value: 500m 

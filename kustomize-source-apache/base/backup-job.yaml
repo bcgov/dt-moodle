@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: moodle-backup
 spec:
-  schedule: "0 1 * * 0"  # Run at 1 AM every Sunday
+  schedule: "0 1 * * *"  # Run at 1 AM every day
   jobTemplate:
     spec:
       template:
@@ -56,7 +56,7 @@ spec:
                 exit 1
               fi
               echo "Found Moodle pod: $MOODLE_POD"
-              kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/www/html/moodledata > $BACKUP_DIR/moodledata.tar.gz
+              kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/moodledata_secure > $BACKUP_DIR/moodledata.tar.gz
 
               # Backup secrets
               echo "Backing up secrets..."

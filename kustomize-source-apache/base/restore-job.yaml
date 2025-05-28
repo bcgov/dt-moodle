@@ -51,7 +51,7 @@ spec:
             echo "Error: Moodle pod not found"
             exit 1
           fi
-          kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/www/html/moodledata > $PRE_RESTORE_DIR/moodledata.tar.gz
+          kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/moodledata_secure > $PRE_RESTORE_DIR/moodledata.tar.gz
           
           echo "Pre-restore backup completed: $PRE_RESTORE_DIR"
           
@@ -97,11 +97,11 @@ spec:
           kubectl cp $BACKUP_DIR/moodledata.tar.gz $NAMESPACE/$MOODLE_POD:/tmp/moodledata.tar.gz
           
           # Extract the backup
-          kubectl exec -n $NAMESPACE $MOODLE_POD -- bash -c "rm -rf /var/www/html/moodledata/* && tar -xzf /tmp/moodledata.tar.gz -C /var/www/html/moodledata --strip-components=1 && rm /tmp/moodledata.tar.gz"
+          kubectl exec -n $NAMESPACE $MOODLE_POD -- bash -c "rm -rf /var/moodledata_secure/* && tar -xzf /tmp/moodledata.tar.gz -C /var/moodledata_secure --strip-components=1 && rm /tmp/moodledata.tar.gz"
           
           # Verify Moodle data restore
           echo "Verifying Moodle data restore..."
-          DATA_DIR_SIZE=$(kubectl exec -n $NAMESPACE $MOODLE_POD -- du -sh /var/www/html/moodledata | cut -f1)
+          DATA_DIR_SIZE=$(kubectl exec -n $NAMESPACE $MOODLE_POD -- du -sh /var/moodledata_secure | cut -f1)
           if [ "$DATA_DIR_SIZE" = "0" ]; then
             echo "Error: Moodle data restore verification failed - empty data directory"
             exit 1

@@ -24,16 +24,10 @@ data:
       'dbcollation' => 'utf8mb4_unicode_ci',
     );
 
-    // Set default HTTP_HOST if not set
-    if (empty($_SERVER['HTTP_HOST'])) {
-      $_SERVER['HTTP_HOST'] = '127.0.0.1:8080';
-    }
-
-    // Always use HTTPS for wwwroot when sslproxy is enabled
-    $CFG->wwwroot = 'https://' . $_SERVER['HTTP_HOST'];
+    $CFG->wwwroot = getenv('MOODLE_WWWROOT') ?: 'http://localhost:8080';
     $CFG->sslproxy = true;
 
-    $CFG->dataroot = '/var/www/html/moodledata';
+    $CFG->dataroot = '/var/moodledata_secure';
     $CFG->admin = 'admin';
     $CFG->directorypermissions = 02777;
     $CFG->dirroot = '/var/www/html';

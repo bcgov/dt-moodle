@@ -22,9 +22,12 @@ spec:
       containers:
       - name: moodle-apache
         image: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache:PLACEHOLDER
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:
+        - name: MOODLE_WWWROOT
+          value: "http://localhost:8080"
         - name: MOODLE_DATABASE_HOST
           value: moodle-mariadb
         - name: MOODLE_DATABASE_NAME
@@ -40,8 +43,8 @@ spec:
               name: moodle-secrets
               key: mysql-password
         volumeMounts:
-        - name: moodledata
-          mountPath: /var/www/html/moodledata
+        - name: moodle-data
+          mountPath: /var/moodledata_secure
         - name: moodle-config
           mountPath: /var/www/html/config.php
           subPath: config.php
@@ -54,9 +57,9 @@ spec:
           limits:
             memory: "512Gi"
       volumes:
-      - name: moodledata
+      - name: moodle-data
         persistentVolumeClaim:
-          claimName: moodledata
+          claimName: moodle-data
       - name: moodle-config
         configMap:
           name: moodle-custom-config
