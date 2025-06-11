@@ -13,11 +13,15 @@ resources:
 - route.yaml
 - service.yaml
 - moodle-config.yaml
+- hpa.yaml
 - backup-job.yaml
 - backup-pvc.yaml
 - backup-sa.yaml
 - moodle-cron.yaml
 - moodle-cron-sa.yaml
+- redis-deployment.yaml
+- redis-service.yaml
+- redis-pvc.yaml
 
 images:
 - name: image-registry.apps.silver.devops.gov.bc.ca/aa0156-tools/dt-moodle-apache

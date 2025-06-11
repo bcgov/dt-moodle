@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-copy-pod
+spec:
+  containers:
+  - name: copy-container
+    image: busybox
+    command: ["/bin/sh", "-c", "echo 'Copy pod is running. Use kubectl exec to copy data from /source to /destination.'; sleep 3600"]
+    volumeMounts:
+    - name: source-volume
+      mountPath: /source
+    - name: destination-volume
+      mountPath: /destination
+  volumes:
+  - name: source-volume
+    persistentVolumeClaim:
+      claimName: mysql-pvc
+  - name: destination-volume
+    persistentVolumeClaim:
+      claimName: mysql-pvc-archive
+  restartPolicy: Never 

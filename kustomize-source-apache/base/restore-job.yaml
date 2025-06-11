@@ -42,7 +42,7 @@ spec:
             echo "Error: MySQL pod not found"
             exit 1
           fi
-          kubectl exec -n $NAMESPACE $MYSQL_POD -- mysqldump -u root -p$MYSQL_ROOT_PASSWORD moodle | gzip > $PRE_RESTORE_DIR/moodle-db.sql.gz
+          kubectl exec -n $NAMESPACE $MYSQL_POD -c mariadb -- mysqldump -u root -p$MYSQL_ROOT_PASSWORD moodle | gzip > $PRE_RESTORE_DIR/moodle-db.sql.gz
           
           # Backup current Moodle data
           echo "Backing up current Moodle data..."
@@ -51,7 +51,7 @@ spec:
             echo "Error: Moodle pod not found"
             exit 1
           fi
-          kubectl exec -n $NAMESPACE $MOODLE_POD -- tar -czf - /var/moodledata_secure > $PRE_RESTORE_DIR/moodledata.tar.gz
+          kubectl exec -n $NAMESPACE $MOODLE_POD -c moodle-apache -- tar -czf - /var/moodledata_secure > $PRE_RESTORE_DIR/moodledata.tar.gz
           
           echo "Pre-restore backup completed: $PRE_RESTORE_DIR"
           
@@ -66,15 +66,15 @@ spec:
           echo "Restoring MySQL database..."
           
           # Drop and recreate the database
-          kubectl exec -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD -e "DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle;"
+          kubectl exec -n $NAMESPACE $MYSQL_POD -c mariadb -- mysql -u root -p$MYSQL_ROOT_PASSWORD -e "DROP DATABASE IF EXISTS moodle; CREATE DATABASE moodle;"
           
           # Restore the database
-          gunzip -c $BACKUP_DIR/moodle-db.sql.gz | kubectl exec -i -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle
+          gunzip -c $BACKUP_DIR/moodle-db.sql.gz | kubectl exec -i -n $NAMESPACE $MYSQL_POD -c mariadb -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle
           
           # Verify MySQL restore
           echo "Verifying MySQL restore..."
           # Get list of tables
-          TABLES=$(kubectl exec -n $NAMESPACE $MYSQL_POD -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle -e "SHOW TABLES;" | tail -n +2)
+          TABLES=$(kubectl exec -n $NAMESPACE $MYSQL_POD -c mariadb -- mysql -u root -p$MYSQL_ROOT_PASSWORD moodle -e "SHOW TABLES;" | tail -n +2)
           TABLE_COUNT=$(echo "$TABLES" | wc -l)
           
           echo "Found $TABLE_COUNT tables in the restored database"
@@ -94,14 +94,14 @@ spec:
           echo "Restoring Moodle data..."
           
           # Copy the backup to the pod
-          kubectl cp $BACKUP_DIR/moodledata.tar.gz $NAMESPACE/$MOODLE_POD:/tmp/moodledata.tar.gz
+          kubectl cp $BACKUP_DIR/moodledata.tar.gz $NAMESPACE/$MOODLE_POD:/tmp/moodledata.tar.gz -c moodle-apache
           
           # Extract the backup
-          kubectl exec -n $NAMESPACE $MOODLE_POD -- bash -c "rm -rf /var/moodledata_secure/* && tar -xzf /tmp/moodledata.tar.gz -C /var/moodledata_secure --strip-components=1 && rm /tmp/moodledata.tar.gz"
+          kubectl exec -n $NAMESPACE $MOODLE_POD -c moodle-apache -- bash -c "rm -rf /var/moodledata_secure/* && tar -xzf /tmp/moodledata.tar.gz -C /var/moodledata_secure --strip-components=1 && rm /tmp/moodledata.tar.gz"
           
           # Verify Moodle data restore
           echo "Verifying Moodle data restore..."
-          DATA_DIR_SIZE=$(kubectl exec -n $NAMESPACE $MOODLE_POD -- du -sh /var/moodledata_secure | cut -f1)
+          DATA_DIR_SIZE=$(kubectl exec -n $NAMESPACE $MOODLE_POD -c moodle-apache -- du -sh /var/moodledata_secure | cut -f1)
           if [ "$DATA_DIR_SIZE" = "0" ]; then
             echo "Error: Moodle data restore verification failed - empty data directory"
             exit 1

@@ -26,11 +26,54 @@ data:
 
     $CFG->wwwroot = getenv('MOODLE_WWWROOT') ?: 'http://localhost:8080';
     $CFG->sslproxy = true;
-
-    $CFG->dataroot = '/var/moodledata_secure';
-    $CFG->admin = 'admin';
+    $CFG->dataroot  = '/var/moodledata_secure';
+    $CFG->admin     = 'admin';
     $CFG->directorypermissions = 02777;
-    $CFG->dirroot = '/var/www/html';
+    $CFG->dirroot   = '/var/www/html';
+
+    // Enable debugging
+    @error_reporting(E_ALL | E_STRICT);
+    @ini_set('display_errors', '1');
+    $CFG->debug = (E_ALL | E_STRICT);
+    $CFG->debugdisplay = 1;
+
+    // Redis Caching Configuration
+    $CFG->session_handler_class = '\\core\\session\\redis';
+    $CFG->session_redis_host = 'moodle-redis';
+    $CFG->session_redis_port = 6379;
+    $CFG->session_redis_database = 0;  // Sessions use database 0
+    $CFG->session_redis_prefix = 'sess_';
+
+    $CFG->cache_stores = [
+        'default_application' => [
+            'store' => 'redis',
+            'host' => 'moodle-redis',
+            'port' => 6379,
+            'db' => 1, // Application cache uses database 1
+            'prefix' => 'app_',
+            'serializer' => 1,
+        ],
+        'default_request' => [
+            'store' => 'redis',
+            'host' => 'moodle-redis',
+            'port' => 6379,
+            'db' => 2, // Request cache uses database 2
+            'prefix' => 'req_',
+            'serializer' => 1,
+        ],
+        'default_session' => [
+            'store' => 'redis',
+            'host' => 'moodle-redis',
+            'port' => 6379,
+            'db' => 0, // Session cache MUST use the same database as session handler
+            'prefix' => 'sess_',
+            'serializer' => 1,
+        ],
+    ];
+    
+    // Use Redis for Moodle Universal Cache (MUC)
+    $CFG->muc['default_application']['store'] = 'redis';
+    $CFG->muc['default_request']['store'] = 'redis';
 
     require_once(__DIR__ . '/lib/setup.php');
 

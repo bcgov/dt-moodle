@@ -1,7 +1,8 @@
 FROM php:8.1-apache
 
 # Install required PHP extensions and dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    $PHPIZE_DEPS \
     libpng-dev \
     libjpeg-dev \
     libxml2-dev \
@@ -10,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     unzip \
     git \
     && rm -rf /var/lib/apt/lists/* \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
     && docker-php-ext-install gd mysqli zip opcache intl soap exif
 
 # Configure PHP
@@ -18,7 +21,10 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -i 's/max_execution_time = .*/max_execution_time = 300/' "$PHP_INI_DIR/php.ini" \
     && sed -i 's/upload_max_filesize = .*/upload_max_filesize = 100M/' "$PHP_INI_DIR/php.ini" \
     && sed -i 's/post_max_size = .*/post_max_size = 100M/' "$PHP_INI_DIR/php.ini" \
-    && sed -i 's/max_input_vars = .*/max_input_vars = 5000/' "$PHP_INI_DIR/php.ini"
+    && sed -i 's/max_input_vars = .*/max_input_vars = 5000/' "$PHP_INI_DIR/php.ini" \
+    && sed -i 's/display_errors = .*/display_errors = On/' "$PHP_INI_DIR/php.ini" \
+    && sed -i 's/display_startup_errors = .*/display_startup_errors = On/' "$PHP_INI_DIR/php.ini" \
+    && sed -i 's/error_reporting = .*/error_reporting = E_ALL/' "$PHP_INI_DIR/php.ini"
 
 # Create non-root user with OpenShift-compatible UID
 RUN groupadd -g 1011470000 moodle \
@@ -42,6 +48,9 @@ RUN cd /var/www/html \
 RUN a2enmod rewrite \
     && a2enmod headers \
     && a2enmod remoteip \
+    # Ensure Apache runs as the moodle user/group
+    && sed -i 's/^export APACHE_RUN_USER=www-data$/export APACHE_RUN_USER=moodle/' /etc/apache2/envvars \
+    && sed -i 's/^export APACHE_RUN_GROUP=www-data$/export APACHE_RUN_GROUP=moodle/' /etc/apache2/envvars \
     && sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
     && sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf \
     && sed -i 's/:80/:8080/g' /etc/apache2/sites-enabled/*.conf \

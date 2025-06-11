@@ -32,4 +32,23 @@ spec:
           app: moodle-apache
     ports:
     - protocol: TCP
-      port: 3306 
+      port: 3306
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+spec:
+  podSelector:
+    matchLabels:
+      app: moodle-redis
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: moodle-apache
+    ports:
+    - protocol: TCP
+      port: 6379 

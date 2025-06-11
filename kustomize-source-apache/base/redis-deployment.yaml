@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moodle-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moodle-redis
+  template:
+    metadata:
+      labels:
+        app: moodle-redis
+    spec:
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data
+      containers:
+      - name: redis
+        image: bitnami/redis:7.2
+        env:
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+          limits:
+            memory: "200Mi"
+            cpu: "200m" 

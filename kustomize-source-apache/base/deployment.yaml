@@ -12,6 +12,10 @@ spec:
       labels:
         app: moodle-apache
     spec:
+      securityContext:
+        fsGroup: 1011470000
+        runAsUser: 1011470000
+        runAsGroup: 1011470000
       initContainers:
       - name: init-apache-dirs
         image: busybox

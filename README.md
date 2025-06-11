@@ -9,6 +9,7 @@ This repository contains Kustomize configurations for deploying Moodle with Apac
 - [Environment Variables](#environment-variables)
 - [Building and Deploying](#building-and-deploying)
 - [Backup and Restore](#backup-and-restore)
+- [Upgrading Moodle](#upgrading-moodle)
 - [Security Notes](#security-notes)
 - [Contributing](#contributing)
 - [License](#license)
@@ -197,6 +198,118 @@ oc logs -f job/restore-latest -n <namespace>
    - Restores from tarball
    - Verifies data directory size
 
+## Upgrading Moodle
+
+Upgrading your Moodle site requires a careful process to ensure data integrity. Follow these steps to upgrade Moodle to a new version.
+
+### Phase 1: Preparation and Backup
+
+1.  **Enable Maintenance Mode**
+
+    Put your Moodle site into maintenance mode to prevent users from making changes during the upgrade. You can do this from the Moodle UI (`Site administration > Server > Maintenance mode`) or by running a command inside your Moodle pod:
+
+    ```bash
+    # Get your moodle pod name
+    oc get pods -l app=moodle -n <namespace>
+
+    # Exec into the pod and enable maintenance mode
+    oc exec <moodle-pod-name> -n <namespace> -- php /var/www/html/admin/cli/maintenance.php --enable
+    ```
+
+2.  **Back Up Your Data**
+
+    Before upgrading, perform a full backup of your database and Moodle data directory. Use the manual backup process described in the [Backup and Restore](#backup-and-restore) section.
+
+    ```bash
+    # Trigger a manual backup
+    oc create job moodle-backup-manual-$(date +%s) --from=cronjob/moodle-backup -n <namespace>
+
+    # Monitor the backup job
+    oc logs -f job/moodle-backup-manual-$(date +%s) -n <namespace>
+    ```
+
+    Ensure the backup completes successfully before proceeding.
+
+### Phase 2: The Upgrade
+
+1.  **Update Moodle Version in `Dockerfile`**
+
+    In `kustomize-source-apache/base/Dockerfile`, update the Moodle version. Find the download URL for the desired version from the [Moodle downloads page](https://download.moodle.org/releases/latest/).
+
+    Update the `curl` command in the `Dockerfile`. For example, to upgrade to Moodle 4.6:
+
+    ```dockerfile
+    # kustomize-source-apache/base/Dockerfile
+    # ...
+    # Download and extract Moodle
+    RUN cd /var/www/html \
+        && curl -fsSL https://download.moodle.org/download.php/direct/stable406/moodle-latest-406.tgz -o moodle.tgz \
+        && tar -xzf moodle.tgz \
+    # ...
+    ```
+
+2.  **Build and Push the New Docker Image**
+
+    Build a new Docker image using the provided script and push it to your registry.
+
+    ```bash
+    source .env
+    ./base/build-apache-image.sh
+    ```
+
+3.  **Deploy the New Image**
+
+    Update your `deployment.yaml` (or the corresponding file in your Kustomize overlay) to use the new image tag. Then apply the changes to your cluster.
+
+    ```yaml
+    # kustomize-source-apache/overlays/<your-env>/deployment.yaml (or base/deployment.yaml)
+    # ...
+    spec:
+      template:
+        spec:
+          containers:
+          - name: moodle-apache
+            image: <your-registry>/<your-namespace>/moodle-apache:<new-version-tag> # <-- Update this line
+    # ...
+    ```
+
+    Apply the Kustomize configuration:
+    ```bash
+    kubectl apply -k overlays/<your-env>
+    ```
+
+### Phase 3: Finalization
+
+1.  **Trigger Moodle Database Upgrade**
+
+    Once the new pods are running, you must run Moodle's internal database upgrade script.
+
+    ```bash
+    # Get the name of a new Moodle pod
+    oc get pods -l app=moodle -n <namespace>
+
+    # Exec into the pod and run the upgrade
+    oc exec -it <new-moodle-pod-name> -n <namespace> -- php /var/www/html/admin/cli/upgrade.php
+    ```
+
+    Follow the prompts in the command-line interface to complete the database upgrade.
+
+2.  **Verify and Disable Maintenance Mode**
+
+    Thoroughly test your Moodle site. Once you are confident that the upgrade was successful, disable maintenance mode.
+
+    ```bash
+    oc exec <new-moodle-pod-name> -n <namespace> -- php /var/www/html/admin/cli/maintenance.php --disable
+    ```
+
+    It is also recommended to purge all caches from the Moodle UI (`Site administration > Development > Purge all caches`).
+
+### Rollback Plan
+
+If the upgrade fails, you can roll back to the previous state:
+1.  **Revert Image:** Change the image tag in your `deployment.yaml` back to the previous version and re-apply the configuration.
+2.  **Restore Data:** If the database or files were corrupted, use the `restore-job.yaml` to restore from the backup you created before the upgrade. Refer to the [Restoring from Backup](#restoring-from-backup) section for instructions.
+
 ## Security Notes
 
 - Never commit the `.env` file to version control
@@ -215,90 +328,3 @@ oc logs -f job/restore-latest -n <namespace>
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
-
-# Moodle Deployment
-
-This repository contains the configuration for deploying Moodle on OpenShift.
-
-## Table of Contents
-- [Prerequisites](#prerequisites)
-- [Deployment](#deployment)
-- [Backup and Restore](#backup-and-restore)
-- [Configuration](#configuration)
-
-## Prerequisites
-
-Before deploying Moodle, ensure you have:
-- Access to an OpenShift cluster
-- Appropriate permissions to create resources in your namespace
-- The `oc` CLI tool installed and configured
-
-## Deployment
-
-To deploy Moodle:
-
-1. Clone this repository
-2. Navigate to the deployment directory
-3. Apply the configuration:
-   ```bash
-   oc apply -k kustomize-source-apache/overlays/test
-   ```
-
-## Backup and Restore
-
-### Backup Configuration
-
-The backup system is configured with:
-- Weekly automated backups (every Sunday at 1 AM)
-- Retention of the last 2 weeks of backups
-- 5Gi storage space allocated for backups
-- Pre-restore backup creation
-- Verification steps for both backup and restore operations
-- Automatic secret backup included in each backup
-
-### Restoring from Backup
-
-#### 1. List Available Backups
-
-To view available backups, create a temporary pod with the backup PVC mounted:
-```bash
-# Create a temporary pod with the backup PVC mounted
-oc apply -f - backup-viewer-pod.yaml 
-
-# Wait for the pod to be ready
-oc wait --for=condition=Ready pod/backup-viewer
-
-# List available backups
-oc exec backup-viewer -- ls -l /backup
-
-# Clean up the temporary pod
-oc delete pod backup-viewer
-```
-
-#### 2. Restore from Latest Backup
-
-To restore from the most recent backup:
-
-1. First, apply the restore job configuration:
-```bash
-oc apply -f base/restore-job.yaml -n <namespace>
-```
-
-2. Then create and run the restore job:
-```bash
-oc create job restore-latest --from=cronjob/moodle-restore -n <namespace>
-```
-
-#### 3. Restore from Specific Backup
-
-To restore from a specific backup date (e.g., 20250409):
-
-1. First, apply the restore job configuration:
-```bash
-oc apply -f base/restore-job.yaml -n <namespace>
-```
-
-2. Then create and run the restore job with the specific backup date:
-```bash
-oc create job restore-specific --from=cronjob/moodle-restore -n <namespace> -- /bin/sh -c 'BACKUP_DATE=YYYYMMDD /restore.sh'
-```
